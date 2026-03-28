@@ -57,6 +57,7 @@ import com.ycngmn.notubetv.utils.fetchScripts
 import com.ycngmn.notubetv.utils.getUpdate
 import com.ycngmn.notubetv.utils.permHandler
 import com.ycngmn.notubetv.utils.readRaw
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -74,6 +75,7 @@ private const val TV_USER_AGENT = "Mozilla/5.0 Cobalt/25 (Sony, PS4, Wired)"
 private val NAV_BUTTON_SIZE = 44.dp
 private val NAV_PAD_PADDING = 20.dp
 private val NAV_BUTTON_COLOR = Color.Black.copy(alpha = 0.22f)
+private const val NAV_PAD_AUTO_HIDE_MILLIS = 4000L
 
 @Composable
 fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
@@ -90,6 +92,8 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
     val updateData = youtubeVM.updateData
     val coroutineScope = rememberCoroutineScope()
     val webViewRef = remember { mutableStateOf<AndroidWebView?>(null) }
+    val isDirectionPadVisible = remember { mutableStateOf(true) }
+    val directionPadResetKey = remember { mutableStateOf(0) }
 
     val loadingState = state.loadingState
     val exitTrigger = remember { mutableStateOf(false) }
@@ -104,6 +108,11 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
         }
     }
 
+    val showDirectionPad: () -> Unit = {
+        isDirectionPadVisible.value = true
+        directionPadResetKey.value += 1
+    }
+
     // Translate native back-presses to 'escape' button press
     BackHandler {
         if (state.loadingState is LoadingState.Finished)
@@ -115,12 +124,23 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
     LaunchedEffect(Unit) {
         youtubeVM.setScript(fetchScripts(context))
         checkForUpdate()
+        showDirectionPad()
+    }
+
+    LaunchedEffect(directionPadResetKey.value) {
+        if (!isDirectionPadVisible.value) {
+            return@LaunchedEffect
+        }
+
+        delay(NAV_PAD_AUTO_HIDE_MILLIS)
+        isDirectionPadVisible.value = false
     }
 
     DisposableEffect(lifecycleOwner, context, navigator) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 checkForUpdate()
+                showDirectionPad()
             }
         }
 
@@ -160,8 +180,12 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
                 configureWebSettings(state)
 
                 webView.apply {
-                    webViewClient = createLoggingWebViewClient()
-                    configureFocusAndTouch(isTvDevice)
+                    webViewClient = createLoggingWebViewClient {
+                        showDirectionPad()
+                    }
+                    configureFocusAndTouch(
+                        onUserInteraction = showDirectionPad,
+                    )
 
                     addJavascriptInterface(ExitBridge(exitTrigger), "ExitBridge")
 
@@ -181,15 +205,27 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
             }
         )
 
-        if (isTvDevice) {
+        if (isDirectionPadVisible.value) {
             DirectionPadOverlay(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(NAV_PAD_PADDING),
-                onUp = { dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_UP) },
-                onDown = { dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_DOWN) },
-                onLeft = { dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_LEFT) },
-                onRight = { dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_RIGHT) },
+                onUp = {
+                    showDirectionPad()
+                    dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_UP)
+                },
+                onDown = {
+                    showDirectionPad()
+                    dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_DOWN)
+                },
+                onLeft = {
+                    showDirectionPad()
+                    dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_LEFT)
+                },
+                onRight = {
+                    showDirectionPad()
+                    dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_RIGHT)
+                },
             )
         }
     }
@@ -260,8 +296,20 @@ private fun configureWebSettings(state: com.multiplatform.webview.web.WebViewSta
     }
 }
 
-private fun createLoggingWebViewClient(): WebViewClient {
+private fun createLoggingWebViewClient(
+    onPageNavigated: () -> Unit,
+): WebViewClient {
     return object : WebViewClient() {
+        override fun onPageStarted(view: AndroidWebView?, url: String?, favicon: android.graphics.Bitmap?) {
+            onPageNavigated()
+            super.onPageStarted(view, url, favicon)
+        }
+
+        override fun onPageFinished(view: AndroidWebView?, url: String?) {
+            onPageNavigated()
+            super.onPageFinished(view, url)
+        }
+
         override fun shouldInterceptRequest(
             view: AndroidWebView?,
             request: WebResourceRequest?
@@ -321,13 +369,23 @@ private fun createLoggingWebViewClient(): WebViewClient {
     }
 }
 
-private fun AndroidWebView.configureFocusAndTouch(isTvDevice: Boolean) {
+private fun AndroidWebView.configureFocusAndTouch(onUserInteraction: () -> Unit) {
     isFocusable = true
     isFocusableInTouchMode = true
     requestFocus()
 
-    if (!isTvDevice) {
-        return
+    setOnKeyListener { _, _, event ->
+        if (event?.action == KeyEvent.ACTION_DOWN) {
+            onUserInteraction()
+        }
+        false
+    }
+
+    setOnGenericMotionListener { _, event ->
+        if (event != null) {
+            onUserInteraction()
+        }
+        false
     }
 
     var lastTouchY = 0f
@@ -337,6 +395,7 @@ private fun AndroidWebView.configureFocusAndTouch(isTvDevice: Boolean) {
     setOnTouchListener { view, event ->
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                onUserInteraction()
                 lastTouchY = event.y
                 lastTouchX = event.x
                 isDragging = false
@@ -345,6 +404,7 @@ private fun AndroidWebView.configureFocusAndTouch(isTvDevice: Boolean) {
             }
 
             MotionEvent.ACTION_MOVE -> {
+                onUserInteraction()
                 val deltaY = (lastTouchY - event.y).toInt()
                 val deltaX = (lastTouchX - event.x).toInt()
                 if (abs(deltaY) > TV_TOUCH_DRAG_THRESHOLD || abs(deltaX) > TV_TOUCH_DRAG_THRESHOLD) {
