@@ -21,6 +21,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -40,6 +41,7 @@ import com.ycngmn.notubetv.utils.fetchScripts
 import com.ycngmn.notubetv.utils.getUpdate
 import com.ycngmn.notubetv.utils.permHandler
 import com.ycngmn.notubetv.utils.readRaw
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private const val DISABLE_AUTO_UPDATE_WHEN_DEBUGGER_ATTACHED = true
@@ -59,6 +61,7 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
 
     val jsScript = youtubeVM.scriptData
     val updateData = youtubeVM.updateData
+    val coroutineScope = rememberCoroutineScope()
 
     val loadingState = state.loadingState
     val exitTrigger = remember { mutableStateOf(false) }
@@ -69,8 +72,10 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
             !DISABLE_AUTO_UPDATE_WHEN_DEBUGGER_ATTACHED || !isDebuggerAttached
 
         if (shouldCheckForUpdate) {
-            getUpdate(context, navigator) { update ->
-                if (update != null) youtubeVM.setUpdate(update)
+            coroutineScope.launch {
+                getUpdate(context, navigator) { update ->
+                    if (update != null) youtubeVM.setUpdate(update)
+                }
             }
         }
     }
