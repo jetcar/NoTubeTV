@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,12 +33,14 @@ fun UpdateAppScreen(tagName: String, downloadUrl: String) {
 
     val isShowDownload = remember { mutableStateOf(true) }
 
-    viewModel.downloadAndInstall(
-        context = context,
-        url = downloadUrl,
-        isShowDialog = isShowDownload,
-        tagName = tagName
-    )
+    LaunchedEffect(downloadUrl, tagName) {
+        viewModel.downloadAndInstall(
+            context = context,
+            url = downloadUrl,
+            isShowDialog = isShowDownload,
+            tagName = tagName
+        )
+    }
 
     if (isShowDownload.value) {
 

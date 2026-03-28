@@ -57,7 +57,7 @@ fun UpdateDialog(releaseData: ReleaseData, navigator: WebViewNavigator) {
                         .padding(20.dp)
                 ) {
                     Text(
-                        text = "NoTubeTV - ${releaseData.tagName} available!",
+                        text = "VidroX - ${releaseData.tagName} available!",
                         modifier = Modifier.padding(bottom = 20.dp),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,

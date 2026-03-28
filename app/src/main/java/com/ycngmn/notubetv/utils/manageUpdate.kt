@@ -6,6 +6,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
+import org.json.JSONArray
 import org.json.JSONObject
 
 data class ReleaseData (
@@ -22,11 +23,14 @@ suspend fun fetchUpdate() : ReleaseData {
 
     val commitSHA = Regex("\\b[a-fA-F0-9]{40}\\b")
 
+    val assets = res.getJSONArray("assets")
+    val apkUrl = findApkAssetUrl(assets)
+
     return ReleaseData(
         tagName = res.getString("tag_name"),
         changelog = res.getString("body")
             .substringAfter("</ins>").replace(commitSHA, "").replace(Regex("\\s{2,}"), " "),
-        downloadUrl = res.getJSONArray("assets").getJSONObject(0).getString("browser_download_url")
+        downloadUrl = apkUrl
     )
 }
 
@@ -36,10 +40,10 @@ suspend fun getUpdate(context: Context, navigator: WebViewNavigator, callback: (
         val remoteRelease = fetchUpdate()
         val remoteVersion = remoteRelease.tagName.removePrefix("v")
 
-        if (remoteVersion > getLocalVersion(context)) {
+        if (compareVersions(remoteVersion, getLocalVersion(context)) > 0) {
             getSkipVersion(navigator) {
                 val skipVersion = it?.removeSurrounding("\"")?.removePrefix("v")
-                if (skipVersion != remoteVersion)
+                if (compareVersions(remoteVersion, skipVersion ?: "0") > 0)
                     callback(remoteRelease)
                 else callback(null)
             }
@@ -52,6 +56,36 @@ suspend fun getUpdate(context: Context, navigator: WebViewNavigator, callback: (
 private fun getLocalVersion(context: Context): String {
     val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
     return pInfo.versionName.toString()
+}
+
+private fun findApkAssetUrl(assets: JSONArray): String {
+    for (index in 0 until assets.length()) {
+        val asset = assets.getJSONObject(index)
+        val url = asset.optString("browser_download_url")
+        if (url.endsWith(".apk", ignoreCase = true)) {
+            return url
+        }
+    }
+
+    if (assets.length() > 0) {
+        return assets.getJSONObject(0).getString("browser_download_url")
+    }
+
+    throw IllegalStateException("Latest release has no downloadable assets")
+}
+
+private fun compareVersions(left: String, right: String): Int {
+    val leftParts = left.split('.').mapNotNull { it.toIntOrNull() }
+    val rightParts = right.split('.').mapNotNull { it.toIntOrNull() }
+    val maxSize = maxOf(leftParts.size, rightParts.size)
+
+    for (i in 0 until maxSize) {
+        val l = leftParts.getOrElse(i) { 0 }
+        val r = rightParts.getOrElse(i) { 0 }
+        if (l != r) return l.compareTo(r)
+    }
+
+    return 0
 }
 
 fun getSkipVersion(navigator: WebViewNavigator, callback: (String?) -> Unit) {

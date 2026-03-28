@@ -53,7 +53,7 @@ class UpdateViewModel : ViewModel() {
 
     private suspend fun downloadApk(context: Context, url: String, tagName: String): File {
         val client = HttpClient(OkHttp)
-        val file = File(context.cacheDir, "NoTubeTV_$tagName.apk")
+        val file = File(context.cacheDir, "VidroX_$tagName.apk")
 
         val response: HttpResponse = client.get(url)
         val total = response.contentLength() ?: -1L

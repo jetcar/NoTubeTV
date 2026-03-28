@@ -149,12 +149,11 @@
     localConfig = JSON.parse(window.localStorage[CONFIG_KEY]);
   } catch (err) {
     //console.warn('Config read failed:', err);
-    localConfig = defaultConfig;
+    localConfig = { ...defaultConfig };
+    window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
   }
 
-  window.localConfig = window.localStorage[CONFIG_KEY]
-    ? JSON.parse(window.localStorage[CONFIG_KEY])
-    : defaultConfig;
+  window.localConfig = localConfig;
 
   window.configRead = function (key) {
     if (window.localConfig[key] === undefined) {
@@ -353,42 +352,42 @@
               currentVal === null
                 ? "CHEVRON_RIGHT"
                 : currentVal
-                ? "CHECK_BOX"
-                : "CHECK_BOX_OUTLINE_BLANK",
+                  ? "CHECK_BOX"
+                  : "CHECK_BOX_OUTLINE_BLANK",
           },
           currentVal !== null
             ? [
-                {
-                  setClientSettingEndpoint: {
-                    settingDatas: [
-                      {
-                        clientSettingEnum: {
-                          item: setting.value,
-                        },
-                        boolValue: !configRead(setting.value),
+              {
+                setClientSettingEndpoint: {
+                  settingDatas: [
+                    {
+                      clientSettingEnum: {
+                        item: setting.value,
                       },
-                    ],
-                  },
-                },
-                {
-                  customAction: {
-                    action: "SETTINGS_UPDATE",
-                    parameters: [index],
-                  },
-                },
-              ]
-            : [
-                {
-                  customAction: {
-                    action: "OPTIONS_SHOW",
-                    parameters: {
-                      options: setting.options,
-                      selectedIndex: 0,
-                      update: false,
+                      boolValue: !configRead(setting.value),
                     },
+                  ],
+                },
+              },
+              {
+                customAction: {
+                  action: "SETTINGS_UPDATE",
+                  parameters: [index],
+                },
+              },
+            ]
+            : [
+              {
+                customAction: {
+                  action: "OPTIONS_SHOW",
+                  parameters: {
+                    options: setting.options,
+                    selectedIndex: 0,
+                    update: false,
                   },
                 },
-              ]
+              },
+            ]
         )
       );
       index++;
@@ -592,7 +591,7 @@
     words[words[lengthProperty]] = (asciiBitLength / maxWord) | 0;
     words[words[lengthProperty]] = asciiBitLength;
 
-    for (j = 0; j < words[lengthProperty]; ) {
+    for (j = 0; j < words[lengthProperty];) {
       var w = words.slice(j, (j += 16));
       var oldHash = hash;
       hash = hash.slice(0, 8);
@@ -612,10 +611,10 @@
             i < 16
               ? w[i]
               : (w[i - 16] +
-                  (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) +
-                  w[i - 7] +
-                  (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) |
-                0);
+                (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) +
+                w[i - 7] +
+                (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) |
+              0);
         var temp2 =
           (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) +
           ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
@@ -685,7 +684,16 @@
         );
       });
 
-      const result = JSON.parse(resp);
+      if (!resp) {
+        return;
+      }
+
+      let result;
+      try {
+        result = JSON.parse(resp);
+      } catch (err) {
+        return;
+      }
 
       if (!result || !result.segments || !result.segments.length) {
         return;
@@ -922,7 +930,7 @@
   }
 
   // Re-apply shorts hiding when config changes
-  window.addEventListener('storage', function(e) {
+  window.addEventListener('storage', function (e) {
     if (e.key === 'ytaf-configuration') {
       applyShortsHidingCSS();
     }

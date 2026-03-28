@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NotubeTV"
+rootProject.name = "VidroX"
 include(":app")
  
