@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - master
+  schedule:
+    - cron: '0 2 * * *'
   pull_request_target:
     types:
       - opened
@@ -19,7 +21,26 @@ jobs:
       pull-requests: read
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        if: github.event_name == 'schedule'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changes in last 24 hours
+        if: github.event_name == 'schedule'
+        id: changes
+        shell: bash
+        run: |
+          count=$(git rev-list --count --since='24 hours ago' HEAD)
+          if [ "$count" -gt 0 ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Update release draft
+        if: github.event_name != 'schedule' || steps.changes.outputs.has_changes == 'true'
         uses: release-drafter/release-drafter@v6
         with:
           config-name: release-drafter.yml
