@@ -8,47 +8,60 @@ on:
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
-  pull_request_target:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - closed
 
 jobs:
-  check_scheduled_changes:
+  detect_release_need:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
-      has_changes: ${{ steps.changes.outputs.has_changes }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+      release_tag: ${{ steps.detect.outputs.release_tag }}
+      tag_exists: ${{ steps.detect.outputs.tag_exists }}
+      last_tag: ${{ steps.detect.outputs.last_tag }}
     steps:
       - name: Checkout repository
-        if: github.event_name == 'schedule'
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Detect changes in last 24 hours
-        if: github.event_name == 'schedule'
-        id: changes
+      - name: Detect version tag and commit delta
+        id: detect
         shell: bash
         run: |
-          count=$(git rev-list --count --since='24 hours ago' HEAD)
-          if [ "$count" -gt 0 ]; then
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          release_tag="v$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -n1)"
+          if [ -z "$release_tag" ]; then
+            echo "Could not read versionName from app/build.gradle.kts"
+            exit 1
           fi
 
-      - name: Default has_changes for non-scheduled events
-        if: github.event_name != 'schedule'
-        id: changes_default
-        shell: bash
-        run: echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          last_tag=$(git tag --list 'v*' --sort=-creatordate | head -n1)
+          if [ -z "$last_tag" ]; then
+            has_changes=true
+          else
+            commit_count=$(git rev-list --count "${last_tag}..HEAD")
+            if [ "$commit_count" -gt 0 ]; then
+              has_changes=true
+            else
+              has_changes=false
+            fi
+          fi
+
+          if git rev-parse -q --verify "refs/tags/${release_tag}" >/dev/null; then
+            tag_exists=true
+          else
+            tag_exists=false
+          fi
+
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "last_tag=$last_tag" >> "$GITHUB_OUTPUT"
+          echo "has_changes=$has_changes" >> "$GITHUB_OUTPUT"
+          echo "tag_exists=$tag_exists" >> "$GITHUB_OUTPUT"
 
   build:
     runs-on: ubuntu-latest
-    needs: check_scheduled_changes
-    if: github.event_name != 'schedule' || needs.check_scheduled_changes.outputs.has_changes == 'true'
+    needs: detect_release_need
+    if: needs.detect_release_need.outputs.has_changes == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -66,19 +79,49 @@ jobs:
       - name: Build project
         run: ./gradlew --no-daemon assembleDebug
 
-  update_release_draft:
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+  publish_release:
     needs:
-      - check_scheduled_changes
+      - detect_release_need
       - build
-    if: github.event_name != 'schedule' || needs.check_scheduled_changes.outputs.has_changes == 'true'
+    if: needs.detect_release_need.outputs.has_changes == 'true'
     permissions:
       contents: write
-      pull-requests: read
     runs-on: ubuntu-latest
     steps:
-      - name: Update release draft
-        uses: release-drafter/release-drafter@v6
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          config-name: release-drafter.yml
+          fetch-depth: 0
+
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-debug-apk
+          path: release-artifacts
+
+      - name: Guard against duplicate version tag
+        if: needs.detect_release_need.outputs.tag_exists == 'true'
+        shell: bash
+        run: |
+          echo "Release tag ${{ needs.detect_release_need.outputs.release_tag }} already exists."
+          echo "Increase versionName in app/build.gradle.kts before publishing a new release."
+          exit 1
+
+      - name: Publish GitHub release
+        if: needs.detect_release_need.outputs.tag_exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.detect_release_need.outputs.release_tag }}
+          name: ${{ needs.detect_release_need.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            release-artifacts/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
