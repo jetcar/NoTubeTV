@@ -523,34 +523,94 @@
           ?.content?.sectionListRenderer?.contents;
 
       if (sections) {
-        // Remove entire shorts shelves
         r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents =
-          sections.filter(
-            (shelf) =>
-              shelf?.shelfRenderer?.tvhtml5ShelfRendererType !==
-              "TVHTML5_SHELF_RENDERER_TYPE_SHORTS"
-          );
-
-        // Remove individual shorts video items (reelWatchEndpoint) from remaining shelves
-        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.forEach(
-          (shelf) => {
-            const items =
-              shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
-            if (items) {
-              shelf.shelfRenderer.content.horizontalListRenderer.items =
-                items.filter(
-                  (item) =>
-                    !item?.gridVideoRenderer?.navigationEndpoint
-                      ?.reelWatchEndpoint
-                );
-            }
-          }
-        );
+          sections
+            .filter((shelf) => !isShortsShelf(shelf))
+            .map((shelf) => removeShortsFromShelf(shelf))
+            .filter((shelf) => shelf != null);
       }
     }
 
     return r;
   };
+
+  function getShelfTitleText(shelf) {
+    return (
+      shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title?.runs?.map((run) => run.text).join("") ||
+      shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.runs?.map((run) => run.text).join("") ||
+      shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.simpleText ||
+      ""
+    );
+  }
+
+  function isShortsEndpoint(endpoint) {
+    return Boolean(
+      endpoint?.reelWatchEndpoint ||
+      endpoint?.watchEndpoint?.playerParams?.includes?.("shorts") ||
+      endpoint?.commandMetadata?.webCommandMetadata?.url?.includes?.("/shorts/") ||
+      endpoint?.browseEndpoint?.browseId?.includes?.("FEshorts")
+    );
+  }
+
+  function isShortsItem(item) {
+    const gridVideo = item?.gridVideoRenderer;
+    const tile = item?.tileRenderer;
+    const reel = item?.reelItemRenderer;
+    const shortsLockup = item?.shortsLockupViewModel;
+    const navigationEndpoint =
+      gridVideo?.navigationEndpoint ||
+      tile?.onSelectCommand ||
+      tile?.onLongPressCommand ||
+      reel?.navigationEndpoint;
+    const title =
+      gridVideo?.title?.simpleText ||
+      gridVideo?.title?.runs?.map((run) => run.text).join("") ||
+      tile?.metadata?.tileMetadataRenderer?.title?.simpleText ||
+      reel?.headline?.simpleText ||
+      "";
+
+    return Boolean(
+      reel ||
+      shortsLockup ||
+      isShortsEndpoint(navigationEndpoint) ||
+      /shorts/i.test(title)
+    );
+  }
+
+  function isShortsShelf(shelf) {
+    const title = getShelfTitleText(shelf);
+    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items || [];
+
+    if (
+      shelf?.shelfRenderer?.tvhtml5ShelfRendererType ===
+      "TVHTML5_SHELF_RENDERER_TYPE_SHORTS"
+    ) {
+      return true;
+    }
+
+    if (/shorts/i.test(title)) {
+      return true;
+    }
+
+    return items.length > 0 && items.every(isShortsItem);
+  }
+
+  function removeShortsFromShelf(shelf) {
+    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (!items) {
+      return shelf;
+    }
+
+    shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
+      (item) => !isShortsItem(item)
+    );
+
+    if (!shelf.shelfRenderer.content.horizontalListRenderer.items.length) {
+      return null;
+    }
+
+    return shelf;
+  }
 
   // The tiny-sha256 module, edited to export itself.
   var sha256 = function sha256(ascii) {
@@ -903,6 +963,7 @@
     );
 
     applyShortsHidingCSS();
+    installShortsHidingObserver();
   }
 
   // Function to hide shorts via CSS — uses only precise selectors, safe for regular content
@@ -921,12 +982,78 @@
           .ytLrTileHeaderRendererShorts {
             display: none !important;
           }
+          ytlr-guide-item-renderer[title='Shorts'],
+          ytlr-guide-item-renderer[href*='shorts'],
+          a[href*='/shorts/'],
+          a[href*='reel_watch_sequence'],
+          a[href*='reelWatchSequence'],
+          [href*='/shorts/'],
+          [href*='reel_watch_sequence'],
+          [href*='reelWatchSequence'],
+          [aria-label='Shorts'],
+          [title='Shorts'] {
+            display: none !important;
+          }
         `;
         document.head.appendChild(style);
       }
+
+      removeShortsElements();
     } else {
       if (existingStyle) existingStyle.remove();
     }
+  }
+
+  function removeShortsElements() {
+    const selectors = [
+      "[tvhtml5-shelf-renderer-type='TVHTML5_SHELF_RENDERER_TYPE_SHORTS']",
+      ".ytLrTileHeaderRendererShorts",
+      "ytlr-guide-item-renderer[title='Shorts']",
+      "ytlr-guide-item-renderer[href*='shorts']",
+      "a[href*='/shorts/']",
+      "a[href*='reel_watch_sequence']",
+      "a[href*='reelWatchSequence']",
+      "[href*='/shorts/']",
+      "[href*='reel_watch_sequence']",
+      "[href*='reelWatchSequence']",
+      "[aria-label='Shorts']",
+      "[title='Shorts']"
+    ];
+
+    selectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((element) => {
+        const shelf = element.closest("[tvhtml5-shelf-renderer-type='TVHTML5_SHELF_RENDERER_TYPE_SHORTS']");
+        if (shelf) {
+          shelf.remove();
+          return;
+        }
+
+        const reelContainer = element.closest("ytlr-shelf-renderer, ytlr-grid-renderer, ytlr-guide-item-renderer, a");
+        if (reelContainer) {
+          reelContainer.remove();
+        } else {
+          element.remove();
+        }
+      });
+    });
+  }
+
+  function installShortsHidingObserver() {
+    if (window.__notubetvShortsObserverInstalled) return;
+    window.__notubetvShortsObserverInstalled = true;
+
+    const observer = new MutationObserver(() => {
+      if (!configRead("enableShorts")) {
+        applyShortsHidingCSS();
+      }
+    });
+
+    observer.observe(document.documentElement || document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["href", "title", "aria-label", "tvhtml5-shelf-renderer-type"]
+    });
   }
 
   // Re-apply shorts hiding when config changes

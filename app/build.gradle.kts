@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,13 +7,13 @@ plugins {
 }
 
 android {
-    namespace = "com.ycngmn.notubetv"
-    compileSdk = 35
+    namespace = "com.jetcar.vidrox"
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.ycngmn.notubetv"
+        applicationId = "com.jetcar.vidrox"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 3
         versionName = "0.0.3"
 
@@ -28,17 +30,22 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    kotlinOptions {
-        jvmTarget = "11"
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
         compose = true
     }
+    buildToolsVersion = "36.0.0"
+    ndkVersion = "25.2.9519653"
 
 
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
 }
 
 dependencies {

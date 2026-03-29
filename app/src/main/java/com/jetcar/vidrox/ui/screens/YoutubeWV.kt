@@ -1,7 +1,11 @@
-package com.ycngmn.notubetv.ui.screens
+package com.jetcar.vidrox.ui.screens
 
 import android.app.Activity
+import android.content.Context
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Debug
 import android.util.Log
 import android.view.KeyEvent
@@ -24,9 +28,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -38,25 +44,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
 import com.multiplatform.webview.web.LoadingState
 import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
-import com.ycngmn.notubetv.R
-import com.ycngmn.notubetv.ui.YoutubeVM
-import com.ycngmn.notubetv.ui.components.UpdateAppScreen
-import com.ycngmn.notubetv.utils.ExitBridge
-import com.ycngmn.notubetv.utils.NetworkBridge
-import com.ycngmn.notubetv.utils.fetchScripts
-import com.ycngmn.notubetv.utils.getUpdate
-import com.ycngmn.notubetv.utils.permHandler
-import com.ycngmn.notubetv.utils.readRaw
+import com.jetcar.vidrox.R
+import com.jetcar.vidrox.ui.YoutubeVM
+import com.jetcar.vidrox.ui.components.UpdateAppScreen
+import com.jetcar.vidrox.utils.ExitBridge
+import com.jetcar.vidrox.utils.NetworkBridge
+import com.jetcar.vidrox.utils.fetchScripts
+import com.jetcar.vidrox.utils.getUpdate
+import com.jetcar.vidrox.utils.permHandler
+import com.jetcar.vidrox.utils.readRaw
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -76,6 +86,7 @@ private val NAV_BUTTON_SIZE = 44.dp
 private val NAV_PAD_PADDING = 20.dp
 private val NAV_BUTTON_COLOR = Color.Black.copy(alpha = 0.22f)
 private const val NAV_PAD_AUTO_HIDE_MILLIS = 4000L
+private val OFFLINE_PANEL_COLOR = Color(0xCC101010)
 
 @Composable
 fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
@@ -94,6 +105,7 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
     val webViewRef = remember { mutableStateOf<AndroidWebView?>(null) }
     val isDirectionPadVisible = remember { mutableStateOf(true) }
     val directionPadResetKey = remember { mutableStateOf(0) }
+    val isOffline = remember { mutableStateOf(!hasInternetConnection(context)) }
 
     val loadingState = state.loadingState
     val exitTrigger = remember { mutableStateOf(false) }
@@ -111,6 +123,13 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
     val showDirectionPad: () -> Unit = {
         isDirectionPadVisible.value = true
         directionPadResetKey.value += 1
+    }
+
+    val refreshContent: () -> Unit = {
+        isOffline.value = !hasInternetConnection(context)
+        webViewRef.value?.reload()
+        checkForUpdate()
+        showDirectionPad()
     }
 
     // Translate native back-presses to 'escape' button press
@@ -139,6 +158,7 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
     DisposableEffect(lifecycleOwner, context, navigator) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                isOffline.value = !hasInternetConnection(context)
                 checkForUpdate()
                 showDirectionPad()
             }
@@ -147,6 +167,35 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    DisposableEffect(context) {
+        val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                isOffline.value = false
+            }
+
+            override fun onLost(network: Network) {
+                isOffline.value = !hasInternetConnection(context)
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities,
+            ) {
+                isOffline.value = !networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
+
+            override fun onUnavailable() {
+                isOffline.value = true
+            }
+        }
+
+        connectivityManager?.registerDefaultNetworkCallback(callback)
+        onDispose {
+            connectivityManager?.unregisterNetworkCallback(callback)
         }
     }
 
@@ -180,9 +229,14 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
                 configureWebSettings(state)
 
                 webView.apply {
-                    webViewClient = createLoggingWebViewClient {
-                        showDirectionPad()
-                    }
+                    webViewClient = createLoggingWebViewClient(
+                        onPageNavigated = {
+                            showDirectionPad()
+                        },
+                        onMainFrameError = {
+                            isOffline.value = !hasInternetConnection(context)
+                        }
+                    )
                     configureFocusAndTouch(
                         onUserInteraction = showDirectionPad,
                     )
@@ -227,6 +281,56 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
                     dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_RIGHT)
                 },
             )
+        }
+
+        if (isOffline.value) {
+            OfflineOverlay(
+                modifier = Modifier.align(Alignment.Center),
+                onRefresh = refreshContent,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OfflineOverlay(
+    modifier: Modifier = Modifier,
+    onRefresh: () -> Unit,
+) {
+    Box(
+        modifier = modifier.padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(OFFLINE_PANEL_COLOR)
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Offline",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "Connection was lost. Check your network and refresh.",
+                color = Color.White.copy(alpha = 0.88f),
+            )
+            Button(
+                onClick = onRefresh,
+                colors = ButtonDefaults.colors(
+                    containerColor = Color.White.copy(alpha = 0.18f),
+                    contentColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    focusedContentColor = Color.Black,
+                ),
+            ) {
+                Text(text = "Refresh")
+            }
         }
     }
 }
@@ -298,6 +402,7 @@ private fun configureWebSettings(state: com.multiplatform.webview.web.WebViewSta
 
 private fun createLoggingWebViewClient(
     onPageNavigated: () -> Unit,
+    onMainFrameError: () -> Unit,
 ): WebViewClient {
     return object : WebViewClient() {
         override fun onPageStarted(view: AndroidWebView?, url: String?, favicon: android.graphics.Bitmap?) {
@@ -326,6 +431,9 @@ private fun createLoggingWebViewClient(
             request: WebResourceRequest?,
             error: WebResourceError?
         ) {
+            if (request?.isForMainFrame == true) {
+                onMainFrameError()
+            }
             Log.e(
                 WEBVIEW_DEBUG_TAG,
                 "load error url=${request?.url} code=${error?.errorCode} description=${error?.description}"
@@ -338,6 +446,9 @@ private fun createLoggingWebViewClient(
             request: WebResourceRequest?,
             errorResponse: WebResourceResponse?
         ) {
+            if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 0) >= 500) {
+                onMainFrameError()
+            }
             Log.e(
                 WEBVIEW_DEBUG_TAG,
                 "http error url=${request?.url} status=${errorResponse?.statusCode}"
@@ -350,6 +461,7 @@ private fun createLoggingWebViewClient(
             handler: SslErrorHandler?,
             error: SslError?
         ) {
+            onMainFrameError()
             val debuggerAttached = Debug.isDebuggerConnected() || Debug.waitingForDebugger()
             Log.e(
                 WEBVIEW_DEBUG_TAG,
@@ -450,4 +562,12 @@ private fun dispatchDpadKey(webView: AndroidWebView?, keyCode: Int) {
     webView.requestFocus()
     webView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
     webView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+}
+
+private fun hasInternetConnection(context: Context): Boolean {
+    val connectivityManager = context.getSystemService(ConnectivityManager::class.java) ?: return false
+    val network = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
 }

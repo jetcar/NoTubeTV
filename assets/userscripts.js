@@ -84,6 +84,7 @@
       searchBar &&
       !searchBar.parentNode.querySelector('[data-notubetv="menu"]')
     ) {
+      installShortsHidingObserver();
       addMenuButton(); // Re-add if missing
     }
   });
@@ -104,25 +105,91 @@
     );
 
     if (exitButton) {
+      ytlr - guide - item - renderer[title = 'Shorts'],
+        ytlr - guide - item - renderer[href *= 'shorts'],
+        a[href *= '/shorts/'],
+        a[href *= 'reel_watch_sequence'],
+        a[href *= 'reelWatchSequence'],
+        [href *= '/shorts/'],
+        [href *= 'reel_watch_sequence'],
+        [href *= 'reelWatchSequence'],
+        [aria - label='Shorts'],
+        [title = 'Shorts'] {
+        display: none!important;
+      }
       exitButton.addEventListener(
         "keydown",
         (e) => {
+
+          removeShortsElements();
           if (
             (e.key === "Enter" || e.keyCode === 13) &&
             typeof ExitBridge !== "undefined" &&
             ExitBridge.onExitCalled
-          ) {
-            e.preventDefault();
-            e.stopPropagation();
-            ExitBridge.onExitCalled();
+
+    function removeShortsElements() {
+              const selectors = [
+                "[tvhtml5-shelf-renderer-type='TVHTML5_SHELF_RENDERER_TYPE_SHORTS']",
+                ".ytLrTileHeaderRendererShorts",
+                "ytlr-guide-item-renderer[title='Shorts']",
+                "ytlr-guide-item-renderer[href*='shorts']",
+                "a[href*='/shorts/']",
+                "a[href*='reel_watch_sequence']",
+                "a[href*='reelWatchSequence']",
+                "[href*='/shorts/']",
+                "[href*='reel_watch_sequence']",
+                "[href*='reelWatchSequence']",
+                "[aria-label='Shorts']",
+                "[title='Shorts']"
+              ];
+
+              selectors.forEach((selector) => {
+                document.querySelectorAll(selector).forEach((element) => {
+                  const shelf = element.closest("[tvhtml5-shelf-renderer-type='TVHTML5_SHELF_RENDERER_TYPE_SHORTS']");
+                  if (shelf) {
+                    shelf.remove();
+                    return;
+                  }
+
+                  const reelContainer = element.closest("ytlr-shelf-renderer, ytlr-grid-renderer, ytlr-guide-item-renderer, a");
+                  if (reelContainer) {
+                    reelContainer.remove();
+                  } else {
+                    element.remove();
+                  }
+                });
+              });
+            }
+
+          function installShortsHidingObserver() {
+            if (window.__notubetvShortsObserverInstalled) return;
+            window.__notubetvShortsObserverInstalled = true;
+
+            const observer = new MutationObserver(() => {
+              if (!configRead("enableShorts")) {
+                applyShortsHidingCSS();
+              }
+            });
+
+            observer.observe(document.documentElement || document.body, {
+              childList: true,
+              subtree: true,
+              attributes: true,
+              attributeFilter: ["href", "title", "aria-label", "tvhtml5-shelf-renderer-type"]
+            });
           }
-        },
-        true
+          ) {
+        e.preventDefault();
+        e.stopPropagation();
+        ExitBridge.onExitCalled();
+      }
+    },
+    true
       );
-    }
+}
   });
-  observer.observe(document.body, { childList: true, subtree: true });
-})();
+observer.observe(document.body, { childList: true, subtree: true });
+}) ();
 /* End exitBridge.js */
 
 /* Start TizenTubeScripts.js */
@@ -354,42 +421,42 @@
               currentVal === null
                 ? "CHEVRON_RIGHT"
                 : currentVal
-                ? "CHECK_BOX"
-                : "CHECK_BOX_OUTLINE_BLANK",
+                  ? "CHECK_BOX"
+                  : "CHECK_BOX_OUTLINE_BLANK",
           },
           currentVal !== null
             ? [
-                {
-                  setClientSettingEndpoint: {
-                    settingDatas: [
-                      {
-                        clientSettingEnum: {
-                          item: setting.value,
-                        },
-                        boolValue: !configRead(setting.value),
+              {
+                setClientSettingEndpoint: {
+                  settingDatas: [
+                    {
+                      clientSettingEnum: {
+                        item: setting.value,
                       },
-                    ],
-                  },
-                },
-                {
-                  customAction: {
-                    action: "SETTINGS_UPDATE",
-                    parameters: [index],
-                  },
-                },
-              ]
-            : [
-                {
-                  customAction: {
-                    action: "OPTIONS_SHOW",
-                    parameters: {
-                      options: setting.options,
-                      selectedIndex: 0,
-                      update: false,
+                      boolValue: !configRead(setting.value),
                     },
+                  ],
+                },
+              },
+              {
+                customAction: {
+                  action: "SETTINGS_UPDATE",
+                  parameters: [index],
+                },
+              },
+            ]
+            : [
+              {
+                customAction: {
+                  action: "OPTIONS_SHOW",
+                  parameters: {
+                    options: setting.options,
+                    selectedIndex: 0,
+                    update: false,
                   },
                 },
-              ]
+              },
+            ]
         )
       );
       index++;
@@ -524,34 +591,104 @@
     ) {
       const s = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents[0];
       s.shelfRenderer.content.horizontalListRenderer.items =
-      s.shelfRenderer.content.horizontalListRenderer.items.filter(i => !i?.adSlotRenderer)
+        s.shelfRenderer.content.horizontalListRenderer.items.filter(i => !i?.adSlotRenderer)
     }
 
     // Filter out shorts sections when shorts are disabled
     if (!configRead("enableShorts")) {
-      // Remove shorts shelves from home/browse sections (precise type check only)
-      if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
-        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents =
-          r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.filter(
-            (shelf) => shelf?.shelfRenderer?.tvhtml5ShelfRendererType !== "TVHTML5_SHELF_RENDERER_TYPE_SHORTS"
-          );
-      }
+      const sections =
+        r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer
+          ?.content?.sectionListRenderer?.contents;
 
-      // Remove individual shorts video items (reelWatchEndpoint) from any list
-      if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
-        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.forEach((shelf) => {
-          const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
-          if (items) {
-            shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
-              (item) => !item?.gridVideoRenderer?.navigationEndpoint?.reelWatchEndpoint
-            );
-          }
-        });
+      if (sections) {
+        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents =
+          sections
+            .filter((shelf) => !isShortsShelf(shelf))
+            .map((shelf) => removeShortsFromShelf(shelf))
+            .filter((shelf) => shelf != null);
       }
     }
 
     return r;
   };
+
+  function getShelfTitleText(shelf) {
+    return (
+      shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title?.runs?.map((run) => run.text).join("") ||
+      shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.runs?.map((run) => run.text).join("") ||
+      shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.simpleText ||
+      ""
+    );
+  }
+
+  function isShortsEndpoint(endpoint) {
+    return Boolean(
+      endpoint?.reelWatchEndpoint ||
+      endpoint?.watchEndpoint?.playerParams?.includes?.("shorts") ||
+      endpoint?.commandMetadata?.webCommandMetadata?.url?.includes?.("/shorts/") ||
+      endpoint?.browseEndpoint?.browseId?.includes?.("FEshorts")
+    );
+  }
+
+  function isShortsItem(item) {
+    const gridVideo = item?.gridVideoRenderer;
+    const tile = item?.tileRenderer;
+    const reel = item?.reelItemRenderer;
+    const shortsLockup = item?.shortsLockupViewModel;
+    const navigationEndpoint =
+      gridVideo?.navigationEndpoint ||
+      tile?.onSelectCommand ||
+      tile?.onLongPressCommand ||
+      reel?.navigationEndpoint;
+    const title =
+      gridVideo?.title?.simpleText ||
+      gridVideo?.title?.runs?.map((run) => run.text).join("") ||
+      tile?.metadata?.tileMetadataRenderer?.title?.simpleText ||
+      reel?.headline?.simpleText ||
+      "";
+
+    return Boolean(
+      reel ||
+      shortsLockup ||
+      isShortsEndpoint(navigationEndpoint) ||
+      /shorts/i.test(title)
+    );
+  }
+
+  function isShortsShelf(shelf) {
+    const title = getShelfTitleText(shelf);
+    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items || [];
+
+    if (
+      shelf?.shelfRenderer?.tvhtml5ShelfRendererType ===
+      "TVHTML5_SHELF_RENDERER_TYPE_SHORTS"
+    ) {
+      return true;
+    }
+
+    if (/shorts/i.test(title)) {
+      return true;
+    }
+
+    return items.length > 0 && items.every(isShortsItem);
+  }
+
+  function removeShortsFromShelf(shelf) {
+    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (!items) {
+      return shelf;
+    }
+
+    shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
+      (item) => !isShortsItem(item)
+    );
+
+    if (!shelf.shelfRenderer.content.horizontalListRenderer.items.length) {
+      return null;
+    }
+
+    return shelf;
+  }
 
 
   // The tiny-sha256 module, edited to export itself.
@@ -602,7 +739,7 @@
     words[words[lengthProperty]] = asciiBitLength;
 
     // process each chunk
-    for (j = 0; j < words[lengthProperty]; ) {
+    for (j = 0; j < words[lengthProperty];) {
       var w = words.slice(j, (j += 16)); // The message is expanded into 64 words as part of the iteration
       var oldHash = hash;
       // This is now the "working hash", often labelled as variables a...g
@@ -628,10 +765,10 @@
             i < 16
               ? w[i]
               : (w[i - 16] +
-                  (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) + // s0
-                  w[i - 7] +
-                  (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) | // s1
-                0);
+                (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) + // s0
+                w[i - 7] +
+                (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) | // s1
+              0);
         // This is only used once, so *could* be moved below, but it only saves 4 bytes and makes things unreadble
         var temp2 =
           (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) + // S0
@@ -805,9 +942,8 @@
           color: "blue",
           opacity: 0.7,
         };
-        const transform = `translateX(${
-          (start / videoDuration) * 100.0
-        }%) scaleX(${(end - start) / videoDuration})`;
+        const transform = `translateX(${(start / videoDuration) * 100.0
+          }%) scaleX(${(end - start) / videoDuration})`;
         const elm = document.createElement("div");
         elm.classList.add("ytLrProgressBarPlayed");
         elm.style["background"] = barType.color;
@@ -1033,7 +1169,7 @@
   }
 
   // Re-apply shorts hiding when config changes
-  window.addEventListener('storage', function(e) {
+  window.addEventListener('storage', function (e) {
     if (e.key === 'ytaf-configuration') {
       applyShortsHidingCSS();
     }

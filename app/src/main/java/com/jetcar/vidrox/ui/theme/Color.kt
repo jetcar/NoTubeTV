@@ -1,4 +1,4 @@
-package com.ycngmn.notubetv.ui.theme
+package com.jetcar.vidrox.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

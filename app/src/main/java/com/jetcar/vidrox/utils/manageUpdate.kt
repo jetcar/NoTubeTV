@@ -1,4 +1,4 @@
-package com.ycngmn.notubetv.utils
+package com.jetcar.vidrox.utils
 
 import android.content.Context
 import com.multiplatform.webview.web.WebViewNavigator

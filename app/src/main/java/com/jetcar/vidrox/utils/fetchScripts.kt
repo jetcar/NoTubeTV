@@ -1,4 +1,4 @@
-package com.ycngmn.notubetv.utils
+package com.jetcar.vidrox.utils
 
 import android.content.Context
 import io.ktor.client.HttpClient
@@ -6,7 +6,7 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
-import com.ycngmn.notubetv.R
+import com.jetcar.vidrox.R
 
 const val SCRIPTS_URL = "https://raw.githubusercontent.com/jetcar/vidrox/refs/heads/main/assets/userscripts.js"
 suspend fun fetchScripts(context: Context): String {

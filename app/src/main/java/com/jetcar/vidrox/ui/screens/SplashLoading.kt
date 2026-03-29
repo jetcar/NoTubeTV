@@ -1,4 +1,4 @@
-package com.ycngmn.notubetv.ui.screens
+package com.jetcar.vidrox.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.ycngmn.notubetv.R
+import com.jetcar.vidrox.R
 
 @Composable
 fun SplashLoading(progress: Float) {
