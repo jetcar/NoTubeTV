@@ -23,7 +23,9 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
 
-private val NAV_BUTTON_SIZE = 44.dp
+private val NAV_BUTTON_SIZE = 72.dp
+private val NAV_BUTTON_SPACING = 12.dp
+private val NAV_BUTTON_FONT_SIZE = 24.sp
 private val NAV_BUTTON_COLOR = Color.Black.copy(alpha = 0.22f)
 private val OFFLINE_PANEL_COLOR = Color(0xCC101010)
 
@@ -76,16 +78,18 @@ internal fun DirectionPadOverlay(
     onUp: () -> Unit,
     onDown: () -> Unit,
     onLeft: () -> Unit,
+    onOk: () -> Unit,
     onRight: () -> Unit,
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(NAV_BUTTON_SPACING),
     ) {
         NavigationButton(symbol = "^", onClick = onUp)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(NAV_BUTTON_SPACING)) {
             NavigationButton(symbol = "<", onClick = onLeft)
+            NavigationButton(symbol = "OK", onClick = onOk)
             NavigationButton(symbol = ">", onClick = onRight)
         }
         NavigationButton(symbol = "v", onClick = onDown)
@@ -105,6 +109,6 @@ private fun NavigationButton(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = symbol, color = Color.White)
+        Text(text = symbol, color = Color.White, fontSize = NAV_BUTTON_FONT_SIZE)
     }
 }

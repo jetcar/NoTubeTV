@@ -244,6 +244,10 @@ fun YoutubeWV(youtubeVM: YoutubeVM = viewModel()) {
                     showDirectionPad()
                     dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_LEFT)
                 },
+                onOk = {
+                    showDirectionPad()
+                    dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_CENTER)
+                },
                 onRight = {
                     showDirectionPad()
                     dispatchDpadKey(webViewRef.value, KeyEvent.KEYCODE_DPAD_RIGHT)
