@@ -96,7 +96,11 @@ class UpdateViewModel : ViewModel() {
 
     fun installApk(context: Context, apkFile: File): Boolean {
         if (!apkFile.exists()) {
-            Toast.makeText(context, "Downloaded update file is no longer available.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                "Downloaded update file is no longer available. Please download the update again.",
+                Toast.LENGTH_LONG
+            ).show()
             return false
         }
 
