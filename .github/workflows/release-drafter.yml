@@ -156,6 +156,8 @@ jobs:
         if: steps.debug_keystore.outputs.cache-hit != 'true'
         shell: bash
         run: |
+          # Keep GitHub debug APK releases upgrade-compatible across workflow runs.
+          # This is only for debug signing continuity, not for production release signing.
           mkdir -p ~/.android
           keytool -genkeypair \
             -keystore ~/.android/debug.keystore \
