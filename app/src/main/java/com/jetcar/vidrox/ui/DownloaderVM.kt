@@ -25,6 +25,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
+private const val UPDATE_DIRECTORY = "updates"
 
 class UpdateViewModel : ViewModel() {
 
@@ -55,7 +56,10 @@ class UpdateViewModel : ViewModel() {
 
     private suspend fun downloadFile(context: Context, url: String, tagName: String): File {
         val client = HttpClient(OkHttp)
-        val file = File(context.cacheDir, "VidroX_$tagName.apk")
+        val updatesDirectory = File(context.filesDir, UPDATE_DIRECTORY).apply {
+            mkdirs()
+        }
+        val file = File(updatesDirectory, "VidroX_$tagName.apk")
 
         try {
             _downloadProgress.value = 0
@@ -91,6 +95,15 @@ class UpdateViewModel : ViewModel() {
     }
 
     fun installApk(context: Context, apkFile: File): Boolean {
+        if (!apkFile.exists()) {
+            Toast.makeText(
+                context,
+                "Downloaded update file is no longer available. Please download the update again.",
+                Toast.LENGTH_LONG
+            ).show()
+            return false
+        }
+
         val apkUri: Uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.provider",
