@@ -2,6 +2,7 @@ package com.jetcar.vidrox.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -25,8 +28,6 @@ import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.jetcar.vidrox.utils.ReleaseData
@@ -106,14 +107,12 @@ fun YTButton(
     onClick: () -> Unit,
 ) {
     Button(
-        modifier = modifier,
+        modifier = modifier.defaultMinSize(minWidth = 120.dp),
         onClick = onClick,
-        shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
-        colors = ButtonDefaults.colors(
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(
             containerColor = Color.DarkGray.copy(alpha = 0.5F),
             contentColor = Color.White,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black
         )
     ) { Text(text = text, fontSize = 16.sp) }
 }
