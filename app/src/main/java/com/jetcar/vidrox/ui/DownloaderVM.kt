@@ -19,11 +19,13 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.contentLength
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.system.exitProcess
 
 class UpdateViewModel : ViewModel() {
 
@@ -80,7 +82,7 @@ class UpdateViewModel : ViewModel() {
         return file
     }
 
-    private fun installApk(context: Context, apkFile: File) {
+    private suspend fun installApk(context: Context, apkFile: File) {
         val apkUri: Uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.provider",
@@ -123,5 +125,10 @@ class UpdateViewModel : ViewModel() {
             }
             context.startActivity(fallbackIntent)
         }
+
+        // Give the system a moment to deliver the install intent before exiting.
+        delay(500)
+        // Exit the app so the installer can replace the running APK without crashing.
+        exitProcess(0)
     }
 }
